@@ -13,7 +13,7 @@
 #include <signal.h>
 #include <sys/time.h>
 
-#define PERIOD 50
+#define PERIOD 100
 
 static sigset_t block;
 
@@ -51,9 +51,7 @@ void init() {
 }
 
 void timer_handler(int sig) {
-  write(1, "ab", 2);
   green_t * susp = running;
-//  write(1, "def", 3);
   // add susp to ready queue
   if(bottom == NULL){
     running->next = susp;
@@ -62,42 +60,10 @@ void timer_handler(int sig) {
     bottom->next = susp;
     bottom = susp;
   }
-  //write(1, "ghi", 3);
   // select the next thread for execution
   green_t *next = susp->next;
   running = next;
-int idPrev  = *(int*)susp->arg;
-int idNext = *(int*)next->arg;
- //char buf1[4] = {idPrev};
-  //char buf2[4] = {idNext};
-  if(idPrev == 0){
-  write(1, "oldzer", 6);
-  }else{
-    write(1, "oldone", 6);
-  }
-
-  if(idNext == 0){
-  write(1, "newzer", 6);
-  }else{
-    write(1, "newone", 6);
-  }
   swapcontext(susp->context, next->context);
-  /*green_t * hello = running->next->next->next->next->next;
-  printf("%s\n", "hello");
-  printf("%s\n", "HI");
-  green_t * susp = running;
-  // add susp to ready queue
-  if(bottom == NULL){
-    running->next = susp;
-    bottom = susp;
-  }else{
-    bottom->next = susp;
-    bottom = susp;
-  }
-  // select the next thread for execution
-  green_t *next = susp->next;
-  running = next;
-  swapcontext(susp->context, next->context);*/
 }
 
 int green_mutex_init(green_mutex_t *mutex) {
@@ -109,7 +75,6 @@ int green_mutex_init(green_mutex_t *mutex) {
 int green_mutex_lock(green_mutex_t *mutex) {
   sigprocmask(SIG_BLOCK, &block, NULL);
   green_t *susp = running;
-  //1printf("%s\n", "start locking");
   if(mutex->taken) {
     struct list *lst = (list *)malloc(sizeof(list));
     lst->current = running;
@@ -122,14 +87,6 @@ int green_mutex_lock(green_mutex_t *mutex) {
       mutex->bottom->next = lst;
       mutex->bottom = lst;
     }
-    // suspend the running thread
-    /*if(bottom == NULL){
-      running->next = susp;
-      bottom = susp;
-    }else{
-      bottom->next = susp;
-      bottom = susp;
-    }*/
     // select the next thread for execution
     green_t *next = susp->next;
     running = next;
@@ -148,7 +105,6 @@ int green_mutex_unlock(green_mutex_t *mutex) {
      // move suspended thread to ready queue
      green_t * susp = mutex->list->current;
      if(susp != NULL){
-      //1 printf("the thread added to ready queue is %i\n", *(int*)susp->arg);
        // add susp to ready queue
        if(bottom == NULL){
          running->next = susp;
@@ -158,7 +114,6 @@ int green_mutex_unlock(green_mutex_t *mutex) {
          bottom = susp;
        }
        list * temp =  mutex->list;
-    //   printf("%i\n", *(int*)mutex->list->next->current->arg);
        mutex->list = mutex->list->next;
        //free list node that we do not need anymore
        free(temp);
@@ -169,12 +124,9 @@ int green_mutex_unlock(green_mutex_t *mutex) {
      }
 
   } else {
-  //1  printf("%s\n", "releasing mutex");
     mutex->taken = 0;
   }
-
   sigprocmask(SIG_UNBLOCK, &block, NULL);
-
   return 0;
 }
 
@@ -206,7 +158,7 @@ void green_cond_init(green_cond_t* cond){
   cond->bottom = NULL;
 }
 
-/*void green_cond_wait_without_lock(green_cond_t* cond){
+void green_cond_wait_basic(green_cond_t* cond){
   sigprocmask(SIG_BLOCK, &block, NULL);
   green_t *this = running;
   struct list *lst = (list *)malloc(sizeof(list));
@@ -223,7 +175,7 @@ void green_cond_init(green_cond_t* cond){
    sigprocmask(SIG_UNBLOCK, &block, NULL);
   // yield execution
     green_yield();
-}*/
+}
 
 void green_cond_wait_without_lock(green_cond_t* cond){
 //  sigprocmask(SIG_BLOCK, &block, NULL);
@@ -240,10 +192,6 @@ void green_cond_wait_without_lock(green_cond_t* cond){
     cond->bottom = lst;
   }
 
-
-  // sigprocmask(SIG_UNBLOCK, &block, NULL);
-  // yield execution
-  //  green_yield();
 }
 
 
@@ -252,9 +200,7 @@ int green_cond_wait(green_cond_t *cond, green_mutex_t *mutex) {
   green_t * susp = running;
   //suspend the thread on the conditional variable
   green_cond_wait_without_lock(cond);
-
   if(mutex != NULL) {
-
     if(mutex->taken == 1){
       if(mutex->list != NULL) {
          // move suspended thread to ready queue
@@ -269,7 +215,6 @@ int green_cond_wait(green_cond_t *cond, green_mutex_t *mutex) {
              bottom = susp;
            }
            list * temp =  mutex->list;
-        //   printf("%i\n", *(int*)mutex->list->next->current->arg);
            mutex->list = mutex->list->next;
            //free list node that we do not need anymore
            free(temp);
@@ -278,7 +223,6 @@ int green_cond_wait(green_cond_t *cond, green_mutex_t *mutex) {
              mutex->bottom = NULL;
            }
          }
-
       } else {
         mutex->taken = 0;
       }
@@ -288,10 +232,9 @@ int green_cond_wait(green_cond_t *cond, green_mutex_t *mutex) {
   // schedule the next thread
   green_t * next = susp->next;
   running = next;
-  //1printf("%s %i\n", "last step before being unscheduled for ", *(int*)next->arg);
   swapcontext(susp->context, next->context);
-//1printf("%s %i\n", "I have been signaled", *(int*)susp->arg);
-susp = running;
+  // get runninng thread
+  susp = running;
   if(mutex != NULL) {
     // try to take the lock
       if(mutex->taken) {
@@ -316,7 +259,6 @@ susp = running;
       mutex->taken = 1;
     }
   }
-
   // unblock
   sigprocmask(SIG_UNBLOCK, &block, NULL);
   return 0;
@@ -325,10 +267,8 @@ susp = running;
 void green_cond_signal(green_cond_t* cond){
   sigprocmask(SIG_BLOCK, &block, NULL);
   if(cond->list != NULL){
-  //printf("%i\n", *(int*)mutex->list->next->current->arg);
   green_t * susp = cond->list->current;
   if(susp != NULL){
-    //printf("%s %i\n", "I am signaling ", *(int*)susp->arg);
     // add susp to ready queue
     if(bottom == NULL){
       running->next = susp;
@@ -414,7 +354,7 @@ int green_join(green_t *thread, void **res) {
   // collect result
    res = thread->retval;
   // free context
-   free(thread->context);
+    free(thread->context);
     sigprocmask(SIG_UNBLOCK, &block, NULL);
   return 0;
 }
